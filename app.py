@@ -1,74 +1,60 @@
 import requests
 from playwright.sync_api import sync_playwright
 
-# URL du webhook Make
-MAKE_WEBHOOK_URL = "https://hook.eu2.make.com/w7hlrakpspmxce7uj4u6lj57rtuldsfr"
+# URL pour récupérer les dernières données
+LATEST_URL = "https://flask-webhook-4u0c.onrender.com/latest"
 
-def get_credentials_from_make():
+def get_latest_data():
     """
-    Récupère les informations envoyées au webhook Make.
+    Récupère les dernières données depuis Render via l'endpoint /latest.
     """
     try:
-        print("Envoi d'une requête au webhook Make...")
-        response = requests.get(MAKE_WEBHOOK_URL)
-        response.raise_for_status()
+        response = requests.get(LATEST_URL)
+        if response.status_code == 200:
+            data = response.json()
+            username = data.get("username")
+            password = data.get("password")
 
-        # Récupérer les données au format JSON
-        data = response.json()
-        username = data.get("username")
-        password = data.get("password")
+            if not username or not password:
+                raise ValueError("Les champs 'username' ou 'password' sont manquants dans la réponse.")
 
-        if not username or not password:
-            raise ValueError("Données manquantes : username ou password.")
-
-        print(f"Informations récupérées : Email={username}, Mot de passe=[protégé]")
-        return username, password
+            return username, password
+        else:
+            print(f"Erreur lors de la requête : {response.status_code}, {response.text}")
+            return None, None
     except Exception as e:
-        print(f"Erreur lors de la récupération des données : {e}")
+        print(f"Erreur de connexion à Render : {e}")
         return None, None
 
-def test_autoentrepreneur_login(username, password):
+def perform_browser_actions(username, password):
     """
-    Automatisation de la connexion sur le site URSSAF avec Playwright.
+    Ouvre le navigateur et effectue les actions en utilisant les données récupérées.
     """
-    if not username or not password:
-        print("Email ou mot de passe non fourni. Arrêt du script.")
-        return
-
-    print("Démarrage de la session Playwright...")
     with sync_playwright() as p:
-        # Lancer le navigateur
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context(ignore_https_errors=True)
-        page = context.new_page()
+        page = browser.new_page()
 
-        # Étape 1 : Accéder à la page d'accueil
-        print("Accès à la page d'accueil de l'URSSAF...")
-        page.goto("https://www.autoentrepreneur.urssaf.fr/portail/accueil.html")
+        print("Accès à la page d'accueil...")
+        page.goto("https://autoentrepreneur.urssaf.fr/")
 
-        # Étape 2 : Cliquer sur "Se connecter"
-        print("Navigation vers la page de connexion...")
+        print("Clique sur le bouton 'Se connecter'...")
         page.click("a#link_mon_compte_deconnecte")
 
-        # Étape 3 : Remplir le formulaire de connexion
-        print("Remplissage du formulaire...")
+        print("Remplissage des champs de connexion...")
         page.fill("input#compte_id", username)
         page.fill("input#compte_mdp", password)
 
-        # Étape 4 : Cliquer sur le bouton "Me connecter"
-        print("Validation du formulaire...")
-        page.click("form#identification button[type='submit']")
+        print("Soumission du formulaire...")
+        page.click("button[type='submit']")
 
-        # Pause pour observer
-        page.wait_for_timeout(5000)
-
-        # Fermer le navigateur
-        print("Fermeture du navigateur...")
+        print("Navigation terminée.")
+        input("Appuie sur Entrée pour fermer le navigateur...")
         browser.close()
 
-if __name__ == "__main__":
-    # Récupérer les informations depuis Make
-    email, password = get_credentials_from_make()
+# Étape 1 : Récupère les données depuis /latest
+username, password = get_latest_data()
 
-    # Lancer la navigation avec Playwright
-    test_autoentrepreneur_login(email, password)
+if username and password:
+    perform_browser_actions(username, password)
+else:
+    print("Impossible de récupérer les données. Vérifie l'endpoint /latest.")
